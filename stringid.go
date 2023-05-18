@@ -29,5 +29,5 @@ func Generate() string {
 
 func init() {
 	// create default generator
-	DefaultGenerator = NewPushGenerator(nil)
+	DefaultGenerator = NewPushGenerator(nil, nil)
 }

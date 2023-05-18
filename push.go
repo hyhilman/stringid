@@ -1,6 +1,7 @@
 package stringid
 
 import (
+	"math"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -28,14 +29,21 @@ type PushGenerator struct {
 	// collisions if called multiple times during the same millisecond.
 	stamp int64
 
-	// stamp is comprised of 72 bits of entropy converted to 12 characters.
+	// stamp is comprised of y bytes of entropy converted to y characters.
 	// this is appended to the generated id to prevent collisions.
 	// the numeric value is incremented in the event of a collision.
-	last [12]int
+	last []int
+
+	// ret is data retention that allow re-use correlation id again after some
+	// specific duration for example if the value is time.Hour then the same
+	// correlation id will be used again after one hour
+	ret *time.Duration
+
+	_timeLength, _lastLength int
 }
 
 // NewPushGenerator creates a new push ID generator.
-func NewPushGenerator(r *rand.Rand) *PushGenerator {
+func NewPushGenerator(r *rand.Rand, ret *time.Duration) *PushGenerator {
 	// ensure rand source
 	var seed int64
 	if r == nil {
@@ -43,9 +51,26 @@ func NewPushGenerator(r *rand.Rand) *PushGenerator {
 		r = rand.New(rand.NewSource(seed))
 	}
 
+	var timeLength, lastLength int
+	if ret != nil {
+		// source of the math https://stackoverflow.com/a/58095701/10961466
+		// 6 are coming from pushChars = 64 = 2^6
+		timeLength = int(math.Ceil(math.Log(float64(ret.Milliseconds()))/math.Log(float64(2)))) / 6
+	} else {
+		timeLength = 8
+	}
+	lastLength = 6
+
 	// create generator and random entropy
-	pg := &PushGenerator{r: r, seed: seed}
-	for i := 0; i < 12; i++ {
+	pg := &PushGenerator{
+		r:           r,
+		seed:        seed,
+		ret:         ret,
+		last:        make([]int, lastLength),
+		_timeLength: timeLength,
+		_lastLength: lastLength,
+	}
+	for i := 0; i < lastLength; i++ {
 		pg.last[i] = r.Intn(64)
 	}
 
@@ -61,13 +86,16 @@ func (pg *PushGenerator) String() string {
 func (pg *PushGenerator) Generate() string {
 	var i int
 
-	id := make([]byte, 20)
+	id := make([]byte, pg._timeLength+pg._lastLength)
 
 	// grab last characters
 	pg.mu.Lock()
 	now := time.Now().UTC().UnixNano() / 1e6
+	if pg.ret != nil {
+		now %= pg.ret.Milliseconds()
+	}
 	if pg.stamp == now {
-		for i = 0; i < 12; i++ {
+		for i = 0; i < pg._lastLength; i++ {
 			pg.last[i]++
 			if pg.last[i] < 64 {
 				break
@@ -77,14 +105,14 @@ func (pg *PushGenerator) Generate() string {
 	}
 	pg.stamp = now
 
-	// set last 12 characters
-	for i = 0; i < 12; i++ {
-		id[19-i] = pushChars[pg.last[i]]
+	// set last characters
+	for i = 0; i < pg._lastLength; i++ {
+		id[len(id)-1-i] = pushChars[pg.last[i]%64]
 	}
 	pg.mu.Unlock()
 
 	// set id to first 8 characters
-	for i = 7; i >= 0; i-- {
+	for i = pg._timeLength; i >= 0; i-- {
 		id[i] = pushChars[int(now%64)]
 		now /= 64
 	}

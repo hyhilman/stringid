@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-var pushRE = regexp.MustCompile(`^server/[A-Za-z0-9_\-]{20}$`)
+var pushRE = regexp.MustCompile(`^server/[A-Za-z0-9_\-]+$`)
 
 func TestMiddleware(t *testing.T) {
 	t.Parallel()

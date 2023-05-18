@@ -45,7 +45,7 @@ func Middleware(opts ...MiddlewareOption) func(http.Handler) http.Handler {
 
 	// ensure generator is set
 	if gm.Generator == nil {
-		gm.Generator = NewPushGenerator(nil)
+		gm.Generator = NewPushGenerator(nil, nil)
 	}
 
 	return gm.Handler

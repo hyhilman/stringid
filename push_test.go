@@ -6,20 +6,21 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestPushGenerator(t *testing.T) {
 	t.Parallel()
 
-	pg := NewPushGenerator(nil)
+	pg := NewPushGenerator(nil, nil)
 
 	a, b := pg.Generate(), pg.Generate()
-	if n := len(a); n != 20 {
-		t.Errorf("length of a should be 20, got: %d", n)
+	if n := len(a); n != pg._lastLength+pg._timeLength {
+		t.Errorf("length of a should be %d, got: %d", pg._lastLength+pg._timeLength, n)
 	}
 
-	if n := len(b); n != 20 {
-		t.Errorf("length of b should be 20, got: %d", n)
+	if n := len(b); n != pg._lastLength+pg._timeLength {
+		t.Errorf("length of b should be %d, got: %d", pg._lastLength+pg._timeLength, n)
 	}
 
 	if a == b {
@@ -34,8 +35,33 @@ func TestPushGenerator(t *testing.T) {
 func TestPushGeneratorMany(t *testing.T) {
 	t.Parallel()
 
-	pg := NewPushGenerator(nil)
+	toDurationP := func(d time.Duration) *time.Duration { return &d }
+	cases := []struct {
+		n string
+		g *PushGenerator
+	}{
+		{
+			n: "default",
+			g: NewPushGenerator(nil, nil),
+		},
+		{
+			n: "rotate_hourly",
+			g: NewPushGenerator(nil, toDurationP(time.Hour)),
+		},
+		{
+			n: "rotate_yearly",
+			g: NewPushGenerator(nil, toDurationP(time.Hour*24*365)),
+		},
+	}
 
+	for _, c := range cases {
+		t.Run(c.n, func(t *testing.T) {
+			testMany(t, c.g)
+		})
+	}
+}
+
+func testMany(t *testing.T, pg *PushGenerator) {
 	wg := new(sync.WaitGroup)
 	for i := 0; i < 4; i++ {
 		wg.Add(1)
@@ -48,8 +74,8 @@ func TestPushGeneratorMany(t *testing.T) {
 			all := make([]string, 1000000)
 			for i := 0; i < 1000000; i++ {
 				id = pg.Generate()
-				if n := len(id); n != 20 {
-					t.Errorf("generated id length should be 20, got: %d", n)
+				if n := len(id); n != pg._lastLength+pg._timeLength {
+					t.Errorf("generated id length should be %d, got: %d", pg._lastLength+pg._timeLength, n)
 				}
 
 				all[i] = id

@@ -29,7 +29,7 @@ func UnaryServerInterceptor(opts ...Option) grpc.UnaryServerInterceptor {
 
 	// ensure generator exists
 	if c.g == nil {
-		c.g = stringid.NewPushGenerator(nil)
+		c.g = stringid.NewPushGenerator(nil, nil)
 	}
 
 	return func(ctxt context.Context, req interface{}, info *grpc.UnaryServerInfo, h grpc.UnaryHandler) (interface{}, error) {
